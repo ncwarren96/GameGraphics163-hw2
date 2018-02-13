@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - blender -json</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				background:#777;
+				padding:0;
+				margin:0;
+				overflow:hidden;
+			}
+
+			#info {
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				color: #ffffff;
+			}
+
+		</style>
+	</head>
+	<body>
+
+		<div id="container"></div>
+
+		<script src="js/three.js"></script>
+		<script src="js/OBJLoader.js"></script>
+		
+
+  <script id="skyboxVS" type="x-shader/x-vertex">
+
+
+
+    </script>
+
+
+    <script id="skyboxFS" type="x-shader/x-fragment">
+
+
+    </script>
+
+
+    <script id="environmentMapVS" type="x-shader/x-vertex">
+
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+      	uniform mat4 projectionMatrix;
+
+	uniform vec3 cameraPosition;
+	
+     	attribute vec3 position; 
+     	attribute vec3 normal; 
+
+	varying vec3 vI;
+	varying vec3 vWorldNormal;
+
+	void main() {
+  		vec4 mvPosition = viewMatrix * modelMatrix * vec4( position, 1.0 );
+  		vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+
+  		vWorldNormal = normalize( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );
+
+  		vI = worldPosition.xyz - cameraPosition;
+
+  		gl_Position = projectionMatrix * mvPosition;
+	}	
+  
+	</script>
+
+	 <script id="environmentMapFS" type="x-shader/x-fragment">
+
+		precision mediump float;
+
+		uniform samplerCube envMap;
+
+		varying vec3 vI, vWorldNormal;
+
+		void main() {
+  			vec3 reflection = reflect( vI, vWorldNormal );
+  			vec4 envColor = textureCube( envMap, vec3( -reflection.x, reflection.yz ) );
+  			gl_FragColor = vec4(envColor);
+		}
+  
+	</script>
+
+
+  <script id="texVS" type="x-shader/x-vertex">
+
+	//Three.js gives us these automatically when a perspective camera is bound to the renderer
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+      	uniform mat4 projectionMatrix;
+
+     	attribute vec3 position;
+	attribute vec2 uv;
+
+	varying vec2 vUV;
+
+	void main() {
+        	vec4 position = viewMatrix * modelMatrix * vec4(position, 1.0);
+	   	vUV = uv;
+        	gl_Position = projectionMatrix * position; 
+     	 }
+
+    </script>
+
+    <script id="texFS" type="x-shader/x-fragment">
+
+	precision mediump float;
+
+	uniform sampler2D tex;
+	varying vec2 vUV;
+
+      	void main() {
+
+		vec4 c = texture2D(tex, vUV);
+        	//gl_FragColor = vec4(vUV.xy, 0.0, 1.0);
+        	gl_FragColor = vec4(c.rgb, 1.0);
+	}
+
+	</script>
+
+
+
+	<script>
+
+		var sb_vs = document.getElementById( 'skyboxVS' ).textContent;
+      		var sb_fs = document.getElementById( 'skyboxFS' ).textContent;
+
+		var em_vs = document.getElementById( 'environmentMapVS' ).textContent;
+      		var em_fs = document.getElementById( 'environmentMapFS' ).textContent;
+		var tex_vs = document.getElementById( 'texVS' ).textContent;
+      		var tex_fs = document.getElementById( 'texFS' ).textContent;
+
+
+
+		var container;
+		var camera, scene, renderer;
+
+		var skyMesh, box, jaguar;
+
+		var texture1;
+
+		init();
+		animate();
+
+
+
+		function init() {
+
+			container = document.getElementById( 'container' );
+
+			camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 2000 );
+			camera.position.set( 0, 0, 5 );
+
+			scene = new THREE.Scene();
+
+
+			var cubeMap = new THREE.CubeTextureLoader()
+				.setPath("./LarnacaBeach/")
+				.load( [
+					'posx.jpg',
+					'negx.jpg',
+					'posy.jpg',
+					'negy.jpg',
+					'posz.jpg',
+					'negz.jpg'
+				] );
+			
+			var uniforms = { "tCube": { type: "t", value: cubeMap } };
+			
+			var material = new THREE.RawShaderMaterial( {
+					uniforms: uniforms,
+					vertexShader: sb_vs,
+					fragmentShader: sb_fs
+				} );
+
+
+			material.depthWrite = false;
+      			material.side = THREE.BackSide;
+			
+
+			var geometry = new THREE.BoxGeometry( 2000, 2000, 2000 );
+
+			skyMesh = new THREE.Mesh( geometry, material );
+
+
+			scene.add( skyMesh );
+
+			
+		
+	var uniforms2 = {
+        	tCube: { type: "t", value: cubeMap },
+	};
+
+
+	var material2 = new THREE.RawShaderMaterial( {
+					uniforms: uniforms2,
+					vertexShader: em_vs,
+					fragmentShader: em_fs
+	} );
+	
+
+	/*
+	var objTex = new THREE.TextureLoader().load( 'jaguar.png' );
+	var uniforms2 = {
+    			tex: { type: "t", value: objTex  },
+	};
+	
+
+     	material2 = new THREE.RawShaderMaterial( {
+			uniforms: uniforms2,
+            		vertexShader: tex_vs,
+            		fragmentShader: tex_fs,	
+	} );
+	*/
+
+			
+
+	var loader = new THREE.OBJLoader(  );
+				
+	loader.load( 'jaguar.obj', function ( object ) {
+		
+		object.traverse( function ( child ) {
+			if ( child instanceof THREE.Mesh ) {
+				child.material = material2;
+			}
+		} );
+		
+		var s = 0.2;
+		object.scale.set( s, s, s );
+		object.position.x += 1.0;
+		object.position.y -= 0.5;
+
+		jaguar = object;
+		scene.add( jaguar );
+	} );
+
+
+	var gBox = new THREE.BoxGeometry( 1, 1, 1 );
+	box = new THREE.Mesh(gBox, material2);
+	box.position.x -= 1.0;
+	scene.add (box);
+
+
+
+	renderer = new THREE.WebGLRenderer();
+	renderer.setPixelRatio( window.devicePixelRatio );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	container.appendChild( renderer.domElement );
+
+	window.addEventListener( 'resize', onWindowResize, false );
+	document.addEventListener('mousemove', onDocumentMouseMove, false);
+
+}
+
+
+function onWindowResize( event ) {
+
+	renderer.setSize( window.innerWidth, window.innerHeight );
+
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+}
+
+
+function animate() {
+
+	requestAnimationFrame( animate );
+	render();
+}
+
+var mouseX = 0.5;
+var mouseY = 0.5;
+var prevMouseX = 0.5;
+var prevMouseY = 0.5;
+
+function render() {
+
+	if (mouseX < prevMouseX) {
+		camera.rotation.y += 0.03;
+	} else if (mouseX > prevMouseX) {
+		camera.rotation.y -= 0.03;
+	}
+
+	prevMouseX = mouseX;
+	prevMouseY = mouseY;
+
+	box.rotation.y += 0.001;
+	box.rotation.x -= 0.002;
+	jaguar.rotation.y -= 0.001;
+	jaguar.rotation.x += 0.002;
+	renderer.render( scene, camera );
+}
+
+
+
+
+	</script>
+	</body>
+</html>

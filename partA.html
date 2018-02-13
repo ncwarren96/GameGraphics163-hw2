@@ -1,0 +1,228 @@
+<!--
+A. Outdoor 3D scene - (45 pts for completion and 5 pts for creativity)
+Using Three.js and GLSL shaders, create a scene with at least the following elements:
+	— A height map that is used to represent terrain. The height map can be created from an
+		image, or procedurally (eg, from a noise function or some other method). Additionally, you
+		will apply one or more textures to the terrain.
+	— A cube map that is used to represent the sky or distant objects.
+	— Bodies of water (eg, where the height map is less than sea level) that reflect the sky.
+	— Be able to move the camera through the scene.
+	— Use dat.gui to control some parameters of the scene.
+Extra credit (5 pts):
+	— In addition to having the water reflect the sky, also use a Fresnel effect to refract the
+		light so that we can also see the bottom of the bodies of water. 
+-->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>HW1 - Part A - Simple Scene</title>
+		<meta charset="utf-8">
+		<style>
+			body {
+				margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+<body>
+
+<div id="container"></div>
+
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src ="js/OBJLoader.js"></script>
+<script id="vs_skybox" type="x-shader/x-vertex">
+
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+	uniform mat4 projectionMatrix;
+
+	attribute vec3 position;
+
+	varying vec3 vWorldPosition;
+
+	void main(){
+
+		vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+		vWorldPosition = worldPosition.xyz;
+
+		vec4 p = viewMatrix * modelMatrix * vec4(position, 1.0);
+		gl_Position = projectionMatrix * p;
+	}
+</script>
+
+<script id="fs_skybox" type="x-shader/x-fragment">
+
+	precision mediump float;
+
+	uniform samplerCube tCube;
+
+	varying vec3 vWorldPosition;
+
+	void main(){
+		gl_FragColor = textureCube(tCube, vec3(vWorldPosition));
+	}
+</script>
+
+<script id="vs_landscape" type="x-shader/x-vertex">
+
+	precision mediump float;
+
+	uniform mat4 modelMatrix;
+	uniform mat4 viewMatrix;
+	uniform mat4 projectionMatrix;
+
+	uniform float displaceAmt;
+    uniform sampler2D heightMap;
+
+	attribute vec3 position;
+	attribute vec2 uv;
+	attribute vec3 normal;
+
+	varying float vDisplace; 
+	varying vec2 vUv;
+
+	void main(){
+		vUv = uv;
+
+		vec4 clr = texture2D(heightMap, uv);
+		vDisplace = clr.r * displaceAmt;
+
+		vec3 newPosition = (position.xyz + normal.xyz * vDisplace).xyz;
+
+		gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(newPosition, 1.0);
+	}
+</script>
+
+<script id="fs_landscape" type="x-shader/x-fragment">
+
+	precision mediump float;
+
+	uniform sampler2D tGround;
+
+	varying vec2 vUv;
+	varying float vDisplace;
+
+	void main(){
+
+		vec4 ground = texture2D(tGround, vUv);
+
+		float zOffset = vDisplace;
+
+		gl_FragColor = vec4(ground.rgb, 1.0);
+
+	}
+
+</script>
+
+<script>
+
+	const WIDTH = window.innerWidth;
+	const HEIGHT = window.innerHeight;
+
+	var vs_skybox = document.getElementById( 'vs_skybox' ).textContent;
+    var fs_skybox = document.getElementById( 'fs_skybox' ).textContent;
+    var vs_lanscape = document.getElementById( 'vs_landscape' ).textContent;
+    var fs_landscpae = document.getElementById( 'fs_landscape' ).textContent;
+
+    var container = document.getElementById('container');
+
+    var tl = new THREE.TextureLoader();
+
+	var rendererMain, sceneMain, cameraMain;
+
+	initSceneMain();
+
+	var skyboxMesh = initSkybox();
+	var landscapeMesh = initLandscape();
+	landscapeMesh.rotateX(-Math.PI/2);
+	sceneMain.add(skyboxMesh);
+	sceneMain.add(landscapeMesh);
+
+	render();
+
+	function initSceneMain(){
+		cameraMain = new THREE.PerspectiveCamera(40, WIDTH/HEIGHT, 1, 10000);
+		cameraMain.position.z = 30;
+		var controls = new THREE.OrbitControls(cameraMain);
+
+		sceneMain = new THREE.Scene();
+
+		rendererMain = new THREE.WebGLRenderer();
+		rendererMain.setPixelRatio(window.devicePixelRatio);
+		rendererMain.setSize(WIDTH, HEIGHT);
+		container.appendChild(rendererMain.domElement);
+
+		window.addEventListener( 'resize', onWindowResize, false );
+		document.addEventListener('mousemove', onDocumentMouseMove, false);
+	}
+
+	function initSkybox(){
+		var skyboxMap = new THREE.CubeTextureLoader()
+		.setPath("./skybox/")
+		.load( [
+			'right.png',
+			'left.png',
+			'top.png',
+			'bottom.png',
+			'back.png',
+			'front.png'
+		] );
+
+		var uniforms = {
+			"tCube": {type: "t", value: skyboxMap}
+		};
+
+		var material = new THREE.RawShaderMaterial({
+			uniforms: uniforms,
+			vertexShader: vs_skybox,
+			fragmentShader: fs_skybox,
+		});
+		material.depthWrite = false;
+		material.side = THREE.BackSide;
+
+		var geometry = new THREE.BoxGeometry(2000,2000,2000);
+
+		return new THREE.Mesh(geometry, material);
+	}
+
+	function initLandscape(){
+
+		var geometry = new THREE.PlaneGeometry(100,100,300,300);
+
+		var uniforms = {
+			displaceAmt: {type: "f", value: 20.0},
+			heightMap: {type: "t", value: tl.load("heightmap.png")},
+			tGround: {type: "t", value: tl.load("grass.png")},
+		};
+
+		var material = new THREE.RawShaderMaterial({
+			uniforms: uniforms,
+			vertexShader: vs_lanscape,
+			fragmentShader: fs_landscpae,
+		});
+		material.side = THREE.DoubleSide;
+
+		return new THREE.Mesh(geometry, material);
+	}
+
+	function render(){
+		requestAnimationFrame(render)
+		rendererMain.render( sceneMain, cameraMain );
+	}
+
+	function onWindowResize( event ) {
+		rendererMain.setSize(WIDTH, HEIGHT);
+		cameraMain.aspect = WIDTH / HEIGHT;
+		cameraMain.updateProjectionMatrix();
+	}
+
+	function onDocumentMouseMove(event) {
+		event.preventDefault();
+		mouseX = (event.clientX / WIDTH) ;
+		mouseY = -(event.clientY / HEIGHT) ;
+
+	}
+
+
+</script>
