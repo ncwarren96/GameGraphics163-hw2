@@ -29,6 +29,7 @@ Extra credit (5 pts):
 <div id="container"></div>
 
 <script src="js/three.js"></script>
+<script src="./js/dat.gui.min.js"></script>
 <script src="js/OrbitControls.js"></script>
 <script src ="js/OBJLoader.js"></script>
 <script id="vs_skybox" type="x-shader/x-vertex">
@@ -73,7 +74,9 @@ Extra credit (5 pts):
 	uniform mat4 projectionMatrix;
 
 	uniform float displaceAmt;
-    uniform sampler2D heightMap;
+	uniform float highFreqAmt;
+	uniform float lowFreqAmt;
+	uniform float iTime;
 
 	attribute vec3 position;
 	attribute vec2 uv;
@@ -189,10 +192,15 @@ Extra credit (5 pts):
 	void main(){
 		vUv = uv;
 
-		vec4 clr = texture2D(heightMap, uv);
-		vDisplace = clr.r * displaceAmt;
+		// vec4 clr = texture2D(heightMap, uv);
+		// vDisplace = clr.r * displaceAmt;
+		float lowFreq = pnoise (position.xyz * 0.002, vec3(10.0)) * lowFreqAmt;
+		float medFreq = pnoise (position.xyz * 0.01, vec3(10.0)) * highFreqAmt;
+		//float highFreq = -0.5 * turbulence(0.7 * (position.xyz + vec3(iTime)));
 
-		vec3 newPosition = (position.xyz + normal.xyz * vDisplace).xyz;
+		float displacement = lowFreq + medFreq;
+		
+		vec3 newPosition = (position.xyz + normal.xyz * displacement).xyz;
 
 		gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(newPosition, 1.0);
 	}
@@ -224,6 +232,7 @@ Extra credit (5 pts):
 	uniform mat4 projectionMatrix;
 
 	uniform vec3 cameraPosition;
+	uniform float iTime;
 
 	attribute vec3 position;
 	attribute vec3 normal;
@@ -232,14 +241,16 @@ Extra credit (5 pts):
 	varying vec3 vWorldNormal;
 
 	void main(){
-		vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0);
+
 		vec4 worldPosition = modelMatrix * vec4(position, 1.0);
 
 		vWorldNormal = normalize(mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz) * normal);
 
 		vI = worldPosition.xyz - cameraPosition;
 
-		gl_Position = projectionMatrix * mvPosition;
+		vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0);
+
+		gl_Position = projectionMatrix  * viewMatrix * modelMatrix  * vec4( position, 1.0 );
 	}
 </script>
 
@@ -258,7 +269,8 @@ Extra credit (5 pts):
 		vec3 reflection = reflect (vI, vWorldNormal);
 		vec4 envColor = textureCube(envMap, vec3(-reflection.x, reflection.yz));
 
-		gl_FragColor = vec4(envColor);
+		vec4 waterColor = vec4(0.1, 0.4, 0.7, 0.2);
+		gl_FragColor = mix(envColor, waterColor, 0.6);
 	}
 </script>
 
@@ -274,7 +286,9 @@ Extra credit (5 pts):
     var vs_water = document.getElementById( 'vs_water' ).textContent;
     var fs_water = document.getElementById( 'fs_water' ).textContent;
 
-    var container = document.getElementById('container');
+    gui = new dat.GUI( { width: 350 } ),
+
+    container = document.getElementById('container');
 
     var tl = new THREE.TextureLoader();
 
@@ -282,13 +296,22 @@ Extra credit (5 pts):
 
 	initSceneMain();
 
+	var params = {
+		lowFreqAmt: 5.0,
+		highFreqAmt: 5.0,
+		seaLevel: 0.0,
+
+	}
+	gui.add(params, "lowFreqAmt", 0.0, 1000.0);
+	gui.add(params, "highFreqAmt", 0.0, 1000.0);
+	gui.add(params, "seaLevel", -400, 400);
+
 	var skyboxMesh = initSkybox();
 	var landscapeMesh = initLandscape();
 	landscapeMesh.rotateX(-Math.PI/2);
 
 	var waterMesh = initWater();
 	waterMesh.rotateX(-Math.PI/2);
-	waterMesh.position.y += 2;
 
 	sceneMain.add(skyboxMesh);
 	sceneMain.add(landscapeMesh);
@@ -298,7 +321,7 @@ Extra credit (5 pts):
 
 	function initSceneMain(){
 		cameraMain = new THREE.PerspectiveCamera(40, WIDTH/HEIGHT, 1, 10000);
-		cameraMain.position.z = 30;
+		cameraMain.position.y = 1000;
 		var controls = new THREE.OrbitControls(cameraMain);
 
 		sceneMain = new THREE.Scene();
@@ -343,10 +366,13 @@ Extra credit (5 pts):
 
 	function initLandscape(){
 
-		var geometry = new THREE.PlaneGeometry(500,500,300,300);
+		var geometry = new THREE.PlaneGeometry(2000,2000,500,500);
 
 		var uniforms = {
-			displaceAmt: {type: "f", value: 20.0},
+			highFreqAmt: {type: "f", value: params.highFreqAmt},
+			lowFreqAmt: {type: "f", value: params.lowFreqAmt},
+			displaceAmt: {type: "f", value: 100.0},
+			iTime: {type: "f", value: 0.0},
 			heightMap: {type: "t", value: tl.load("heightmap.png")},
 			tGround: {type: "t", value: tl.load("grass.png")},
 		};
@@ -362,7 +388,7 @@ Extra credit (5 pts):
 	}
 
 	function initWater(){
-		var geometry =new THREE.PlaneGeometry(2000, 2000, 100, 100);
+		var geometry =new THREE.PlaneGeometry(2000, 2000, 500, 500);
 
 		var uniforms = {
 			cameraPosition: {type:"v3", value: cameraMain.position}
@@ -379,6 +405,9 @@ Extra credit (5 pts):
 
 	function render(){
 		requestAnimationFrame(render)
+		landscapeMesh.material.uniforms.lowFreqAmt.value = params.lowFreqAmt;
+		landscapeMesh.material.uniforms.highFreqAmt.value = params.highFreqAmt;
+		waterMesh.position.y = params.seaLevel;
 		rendererMain.render( sceneMain, cameraMain );
 	}
 
