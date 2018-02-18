@@ -199,7 +199,7 @@ Extra credit (5 pts):
 		//float highFreq = -0.5 * turbulence(0.7 * (position.xyz + vec3(iTime)));
 
 		float displacement = lowFreq + medFreq;
-		
+
 		vec3 newPosition = (position.xyz + normal.xyz * displacement).xyz;
 
 		gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(newPosition, 1.0);
@@ -297,8 +297,8 @@ Extra credit (5 pts):
 	initSceneMain();
 
 	var params = {
-		lowFreqAmt: 5.0,
-		highFreqAmt: 5.0,
+		lowFreqAmt: 300.0,
+		highFreqAmt: 100.0,
 		seaLevel: 0.0,
 
 	}
