@@ -60,7 +60,7 @@ THREE.GPUParticleSystem = function ( options ) {
 
 			// unpack things from our attributes'
 
-			'	vColor = vec4( color, 1.0 );',
+			'	vColor = vec4( 0.5, 0.5, 0.5, 1.0 );',
 
 			// convert our velocity back into a value we can use'
 
@@ -175,7 +175,7 @@ THREE.GPUParticleSystem = function ( options ) {
 	this.particleNoiseTex = this.PARTICLE_NOISE_TEXTURE || textureLoader.load( 'perlin-512.png' );
 	this.particleNoiseTex.wrapS = this.particleNoiseTex.wrapT = THREE.RepeatWrapping;
 
-	this.particleSpriteTex = this.PARTICLE_SPRITE_TEXTURE || textureLoader.load( 'particle2.png' );
+	this.particleSpriteTex = this.PARTICLE_SPRITE_TEXTURE || textureLoader.load( 'particle-smoke.png' );
 	this.particleSpriteTex.wrapS = this.particleSpriteTex.wrapT = THREE.RepeatWrapping;
 
 	this.particleShaderMat = new THREE.ShaderMaterial( {
